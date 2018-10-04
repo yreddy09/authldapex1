@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <mule xmlns:ldap="http://www.mulesoft.org/schema/mule/ldap" xmlns:mule-ss="http://www.mulesoft.org/schema/mule/spring-security" xmlns:ss="http://www.springframework.org/schema/security"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:oauth2-provider="http://www.mulesoft.org/schema/mule/oauth2-provider" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/spring-security http://www.mulesoft.org/schema/mule/spring-security/current/mule-spring-security.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
@@ -12,43 +11,53 @@ http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/fil
 http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
-http://www.mulesoft.org/schema/mule/oauth2-provider http://www.mulesoft.org/schema/mule/oauth2-provider/current/mule-oauth2-provider.xsd
 http://www.mulesoft.org/schema/mule/ldap http://www.mulesoft.org/schema/mule/ldap/current/mule-ldap.xsd">
 
 
 	<spring:beans>
-		<ss:authentication-manager alias="authenticationManager">
-			<ss:authentication-provider>
-				<ss:user-service id="userService">
-					<ss:user name="admin" password="admin" authorities="ROLE_ADMIN" />
-					<ss:user name="user1" password="work4proj" authorities="ROLE_DEV" />
-				</ss:user-service>
-			</ss:authentication-provider>
-		</ss:authentication-manager>
-		<!-- Spring Authentication Manager -->
-		<!-- Spring Security LDAP Server bean -->
-		<!--  <ss:ldap-server id="LdapServer" url="ldap://ldap.yourorg.com.au:389" /> -->
 
-		<!--  <ss:authentication-manager alias="SpringAuthManager">
-			<ss:ldap-authentication-provider server-ref="LdapServer" user-search-filter="(uid={0})" user-search-base="ou=People,dc=YourOrg,dc=com,dc=au"
-				group-search-base="ou=Accessgroups,dc=YourOrg,dc=com,dc=au" group-search-filter="(memberUid={0})" group-role-attribute="cn" />
-		</ss:authentication-manager>  -->
+		<!-- LDAP server -->
+		<ss:ldap-server id="LdapServer" url="ldaps://hhs-mmi-d-adc54" manager-dn="CN=srv-act-liferay,CN=Managed Service Accounts,DC=clm,DC=scdhhs,DC=local"
+			manager-password="ls2negol!" port="636" />
+
+		<!-- Spring Authentication Manager -->
+		<ss:authentication-manager alias="LDAPAuthManager" id="LDAPAuthManager">
+			<ss:ldap-authentication-provider server-ref="LdapServer" user-search-filter="(uid={0})" user-search-base="CN=Users,DC=clm,DC=scdhhs,DC=local" />
+			<!-- <ss:ldap-authentication-provider server-ref="LdapServer" user-search-base="CN=Users,DC=clm,DC=scdhhs,DC=local" user-search-filter="(uid={0})" group-search-base="DC=clm,DC=scdhhs,DC=local" 
+				group-search-filter="(memberUid={0})" group-role-attribute="cn" /> -->
+
+		</ss:authentication-manager>
+
 	</spring:beans>
+
 	<!-- Mule's Spring Security Manager -->
-	<mule-ss:security-manager name="muleSecurityManager" doc:name="Spring Security Provider">
-		<mule-ss:delegate-security-provider name="memory-provider" delegate-ref="authenticationManager" />
-		<!--   <mule-ss:delegate-security-provider name="SpringSecurityProvider" delegate-ref="SpringAuthManager" /> -->
-		<!--  <mule-ss:delegate-security-provider name="SpringSecurityProviderUT" delegate-ref="SpringAuthManagerUT" /> -->
+	<mule-ss:security-manager name="LDAPSecurityManager" doc:name="LDAP Security Provider">
+		<mule-ss:delegate-security-provider name="LDAPSecurityProvider" delegate-ref="LDAPAuthManager" />
 	</mule-ss:security-manager>
 
 	<http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration" />
-
+	<ldap:config name="LDAP__Configuration" authDn="CN=srv-act-liferay,CN=Managed Service Accounts,DC=clm,DC=scdhhs,DC=local" authPassword="ls2negol!"
+		authentication="simple" url="ldaps://hhs-mmi-d-adc54:636" doc:name="LDAP: Configuration" schemaEnabled="true"/>
 
 	<flow name="OAuthExampleFlow">
 		<http:listener config-ref="HTTP_Listener_Configuration" path="/hello" doc:name="HTTP" />
-		<mule-ss:http-security-filter realm="mule-realm" securityProviders="memory-provider" />
+		<mule-ss:http-security-filter realm="mule-realm" securityProviders="LDAPSecurityProvider" />
+		<!-- <mule-ss:http-security-filter realm="mule-realm" securityProviders="memory-provider" /> -->
 		<set-payload value="#['HELLO WORLD']" doc:name="Set Payload" />
 		<logger message="#[payload]" level="INFO" doc:name="Logger" />
+	</flow>
+	<flow name="LDAPFlow">
+		<http:listener config-ref="HTTP_Listener_Configuration" path="/ldap" doc:name="HTTP" />
+        
+        <set-session-variable variableName="userInfo" value="#[org.mule.util.StringUtils.split(new String(org.mule.util.Base64.decode(message.inboundProperties.'Authorization'.substring('Basic'.length()).trim()), java.nio.charset.Charset.forName('UTF-8')), ':')]" doc:name="Session Variable"/>
+        <logger message="user name = #[sessionVars.userInfo[0]] ***** password= #[sessionVars.userInfo[1]]" level="INFO" doc:name="Logger"/>
+        
+            <ldap:bind config-ref="LDAP__Configuration" authentication="simple" doc:name="LDAP" authDn="CN=#[sessionVars.userInfo[0]],CN=Users,DC=clm,DC=scdhhs,DC=local" authPassword="#[sessionVars.userInfo[1]]"/>
+        
+		<!--  <ldap:bind config-ref="LDAP__Configuration" doc:name="LDAP" authDn="CN=perftest001,CN=Users,DC=clm,DC=scdhhs,DC=local" authPassword="Welcome_18"
+			authentication="simple" /> -->
+		<set-payload value="#['LDAP AUTH SUCCESSFULL']" doc:name="Set Payload" />
+		<logger level="INFO" doc:name="Logger" />
 	</flow>
 
 </mule>
